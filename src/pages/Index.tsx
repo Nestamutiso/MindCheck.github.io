@@ -4,9 +4,12 @@ import LoginScreen from "@/components/LoginScreen";
 import ChatView from "@/components/ChatView";
 import InsightsView from "@/components/InsightsView";
 import SettingsView from "@/components/SettingsView";
+import BreathingView from "@/components/BreathingView";
+import ProfessionalHelpView from "@/components/ProfessionalHelpView";
+import ForumsView from "@/components/ForumsView";
 import BottomNav from "@/components/BottomNav";
 
-type View = "home" | "insights" | "settings";
+type View = "home" | "breathing" | "forums" | "help" | "settings";
 
 const Index = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -71,9 +74,9 @@ const Index = () => {
                 onCrisis={handleCrisis}
               />
             )}
-            {activeView === "insights" && (
-              <InsightsView moods={moods} showCrisisAlert={showCrisisAlert} />
-            )}
+            {activeView === "breathing" && <BreathingView />}
+            {activeView === "forums" && <ForumsView />}
+            {activeView === "help" && <ProfessionalHelpView />}
             {activeView === "settings" && (
               <SettingsView
                 isDarkMode={isDarkMode}

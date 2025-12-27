@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Send } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Send, Sparkles } from "lucide-react";
 import ChatBubble from "./ChatBubble";
+import { streamChat } from "@/lib/streamChat";
+import { toast } from "@/hooks/use-toast";
 
 interface Message {
   text: string;
@@ -17,13 +19,14 @@ interface ChatViewProps {
 const ChatView = ({ userName, onMoodDetected, onCrisis }: ChatViewProps) => {
   const [messages, setMessages] = useState<Message[]>([
     {
-      text: `Welcome ${userName}. I'm your thought partner. How is your heart today?`,
+      text: `Hello ${userName} 💜 I'm Aura, your mental wellness companion. I'm here to listen without judgment and support you through whatever you're feeling. How are you doing today?`,
       isBot: true,
     },
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
+  const [conversationHistory, setConversationHistory] = useState<Array<{role: "user" | "assistant"; content: string}>>([]);
 
   useEffect(() => {
     if (chatLogRef.current) {
@@ -31,33 +34,63 @@ const ChatView = ({ userName, onMoodDetected, onCrisis }: ChatViewProps) => {
     }
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const detectMood = useCallback((text: string) => {
+    const heavyPatterns = /\b(sad|depressed|anxious|scared|lonely|hurt|pain|cry|hopeless|worthless|suicide|kill|die|end it|give up|can't go on|exhausted|overwhelmed|broken|desperate|miserable|terrible|awful|stressed|panic)\b/i;
+    const goodPatterns = /\b(good|happy|great|amazing|wonderful|excited|joy|grateful|blessed|better|hopeful|calm|peaceful|content|relieved|proud|loved|safe|optimistic)\b/i;
+    
+    if (heavyPatterns.test(text)) {
+      onMoodDetected("heavy");
+      if (/\b(suicide|kill myself|end it|die|can't go on|no point|give up on life)\b/i.test(text)) {
+        onCrisis();
+      }
+    } else if (goodPatterns.test(text)) {
+      onMoodDetected("good");
+    }
+  }, [onMoodDetected, onCrisis]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isTyping) return;
 
     const userMessage = input.trim();
     setMessages((prev) => [...prev, { text: userMessage, isBot: false }]);
     setInput("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      let reply = "Tell me more about that.";
-      
-      if (/sad|bad|hard|tired|stressed|anxious|worried|scared|lonely|hurt|pain|cry/i.test(userMessage)) {
-        reply = "I hear you. It sounds heavy. I'm right here with you. 💜";
-        onMoodDetected("heavy");
-        onCrisis();
-      } else if (/good|happy|win|great|amazing|wonderful|excited|joy|grateful|blessed/i.test(userMessage)) {
-        reply = "That's a win! I'm so happy for you. Keep shining! ✨";
-        onMoodDetected("good");
-      } else if (/hello|hi|hey/i.test(userMessage)) {
-        reply = `Hey there ${userName}! How are you feeling right now?`;
-      } else if (/thank/i.test(userMessage)) {
-        reply = "You're always welcome. I'm here whenever you need me. 💜";
-      }
+    detectMood(userMessage);
 
-      setMessages((prev) => [...prev, { text: reply, isBot: true }]);
-      setIsTyping(false);
-    }, 800);
+    const newHistory = [...conversationHistory, { role: "user" as const, content: userMessage }];
+    setConversationHistory(newHistory);
+
+    let assistantResponse = "";
+
+    await streamChat({
+      messages: newHistory,
+      userName,
+      onDelta: (chunk) => {
+        assistantResponse += chunk;
+        setMessages((prev) => {
+          const lastMsg = prev[prev.length - 1];
+          if (lastMsg?.isBot && prev.length > 1 && prev[prev.length - 2].text === userMessage) {
+            return prev.map((m, i) => 
+              i === prev.length - 1 ? { ...m, text: assistantResponse } : m
+            );
+          }
+          return [...prev, { text: assistantResponse, isBot: true }];
+        });
+      },
+      onDone: () => {
+        setConversationHistory((prev) => [...prev, { role: "assistant", content: assistantResponse }]);
+        setIsTyping(false);
+      },
+      onError: (error) => {
+        toast({
+          variant: "destructive",
+          title: "Connection Issue",
+          description: error,
+        });
+        setIsTyping(false);
+      },
+    });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -74,29 +107,32 @@ const ChatView = ({ userName, onMoodDetected, onCrisis }: ChatViewProps) => {
       className="flex flex-col h-full"
     >
       <header className="py-4">
-        <motion.h1
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-2xl font-bold text-foreground"
+          className="flex items-center gap-2"
         >
-          Hi, {userName}
-        </motion.h1>
-        <p className="text-muted-foreground text-sm">How are you feeling today?</p>
+          <h1 className="text-2xl font-bold text-foreground">Hi, {userName}</h1>
+          <Sparkles className="w-5 h-5 text-primary" />
+        </motion.div>
+        <p className="text-muted-foreground text-sm">Your safe space to share and heal</p>
       </header>
 
       <div
         ref={chatLogRef}
         className="flex-1 overflow-y-auto space-y-3 py-4 pr-2 -mr-2"
       >
-        {messages.map((msg, idx) => (
-          <ChatBubble
-            key={idx}
-            message={msg.text}
-            isBot={msg.isBot}
-            index={idx}
-          />
-        ))}
-        {isTyping && (
+        <AnimatePresence>
+          {messages.map((msg, idx) => (
+            <ChatBubble
+              key={idx}
+              message={msg.text}
+              isBot={msg.isBot}
+              index={idx}
+            />
+          ))}
+        </AnimatePresence>
+        {isTyping && messages[messages.length - 1]?.isBot === false && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -128,14 +164,16 @@ const ChatView = ({ userName, onMoodDetected, onCrisis }: ChatViewProps) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Type a thought..."
-          className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none px-2"
+          placeholder="Share what's on your mind..."
+          disabled={isTyping}
+          className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50"
         />
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleSend}
-          className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground shadow-glow"
+          disabled={isTyping || !input.trim()}
+          className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Send className="w-5 h-5" />
         </motion.button>
