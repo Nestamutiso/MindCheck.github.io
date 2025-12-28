@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
-import LoginScreen from "@/components/LoginScreen";
+import { useAuth } from "@/contexts/AuthContext";
 import ChatView from "@/components/ChatView";
 import InsightsView from "@/components/InsightsView";
 import SettingsView from "@/components/SettingsView";
@@ -8,16 +9,24 @@ import BreathingView from "@/components/BreathingView";
 import ProfessionalHelpView from "@/components/ProfessionalHelpView";
 import ForumsView from "@/components/ForumsView";
 import BottomNav from "@/components/BottomNav";
+import MusicPlayer from "@/components/MusicPlayer";
+import { Loader2 } from "lucide-react";
 
 type View = "home" | "breathing" | "forums" | "help" | "settings";
 
 const Index = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
+  const navigate = useNavigate();
+  const { user, profile, loading, signOut } = useAuth();
   const [activeView, setActiveView] = useState<View>("home");
   const [moods, setMoods] = useState<Array<"good" | "heavy" | null>>([null, null, null, null, null, null, null]);
   const [showCrisisAlert, setShowCrisisAlert] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -27,17 +36,9 @@ const Index = () => {
     }
   }, [isDarkMode]);
 
-  const handleLogin = (name: string) => {
-    setUserName(name);
-    setIsLoggedIn(true);
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName("");
-    setActiveView("home");
-    setMoods([null, null, null, null, null, null, null]);
-    setShowCrisisAlert(false);
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/auth");
   };
 
   const handleMoodDetected = (mood: "good" | "heavy") => {
@@ -58,36 +59,49 @@ const Index = () => {
     setIsDarkMode((prev) => !prev);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  const userName = profile?.display_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Friend";
+
   return (
     <div className="min-h-screen">
-      <AnimatePresence>
-        {!isLoggedIn && <LoginScreen onLogin={handleLogin} />}
-      </AnimatePresence>
-
-      {isLoggedIn && (
-        <div className="h-screen flex flex-col">
-          <main className="flex-1 overflow-hidden px-5 pb-24">
+      <div className="h-screen flex flex-col">
+        <main className="flex-1 overflow-hidden px-5 pb-24">
+          <AnimatePresence mode="wait">
             {activeView === "home" && (
               <ChatView
+                key="chat"
                 userName={userName}
                 onMoodDetected={handleMoodDetected}
                 onCrisis={handleCrisis}
               />
             )}
-            {activeView === "breathing" && <BreathingView />}
-            {activeView === "forums" && <ForumsView />}
-            {activeView === "help" && <ProfessionalHelpView />}
+            {activeView === "breathing" && <BreathingView key="breathing" />}
+            {activeView === "forums" && <ForumsView key="forums" />}
+            {activeView === "help" && <ProfessionalHelpView key="help" />}
             {activeView === "settings" && (
               <SettingsView
+                key="settings"
                 isDarkMode={isDarkMode}
                 onToggleDarkMode={toggleDarkMode}
                 onLogout={handleLogout}
               />
             )}
-          </main>
-          <BottomNav activeView={activeView} onNavigate={setActiveView} />
-        </div>
-      )}
+          </AnimatePresence>
+        </main>
+        <BottomNav activeView={activeView} onNavigate={setActiveView} />
+        <MusicPlayer />
+      </div>
     </div>
   );
 };
