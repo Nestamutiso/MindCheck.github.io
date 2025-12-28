@@ -1,29 +1,48 @@
 name: Build MindCheck APK
+
 on:
   push:
-    branches: [ main ] # This starts the build when you save your code
+    branches: [ main ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npm run build
-      - run: npx cap add android || true
-      - run: npx cap sync android
-      - uses: actions/setup-java@v4
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npm install -D @capacitor/cli @capacitor/android
+
+      - name: Build Web Project
+        run: npm run build
+
+      - name: Initialize & Sync Android
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Build APK
+
+      - name: Fix Permissions & Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v4
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: MindCheck-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
