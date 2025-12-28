@@ -1,17 +1,23 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Heart, Mail, Lock, User, ArrowLeft, Loader2 } from "lucide-react";
+import { Heart, Mail, Lock, User, ArrowLeft, Loader2, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { z } from "zod";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 
 const emailSchema = z.string().email("Please enter a valid email address");
 const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
 const nameSchema = z.string().min(1, "Name is required").max(100, "Name is too long");
+const phoneSchema = z.string().regex(/^\+[1-9]\d{6,14}$/, "Please enter a valid phone number with country code (e.g., +1234567890)");
 
-type AuthMode = "welcome" | "signin" | "signup";
+type AuthMode = "welcome" | "signin" | "signup" | "phone" | "phone-verify";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -20,8 +26,10 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string; phone?: string }>({});
 
   useEffect(() => {
     if (!loading && user) {
@@ -30,22 +38,31 @@ const Auth = () => {
   }, [user, loading, navigate]);
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string; name?: string } = {};
+    const newErrors: { email?: string; password?: string; name?: string; phone?: string } = {};
     
-    const emailResult = emailSchema.safeParse(email);
-    if (!emailResult.success) {
-      newErrors.email = emailResult.error.errors[0].message;
-    }
+    if (mode === "signin" || mode === "signup") {
+      const emailResult = emailSchema.safeParse(email);
+      if (!emailResult.success) {
+        newErrors.email = emailResult.error.errors[0].message;
+      }
 
-    const passwordResult = passwordSchema.safeParse(password);
-    if (!passwordResult.success) {
-      newErrors.password = passwordResult.error.errors[0].message;
+      const passwordResult = passwordSchema.safeParse(password);
+      if (!passwordResult.success) {
+        newErrors.password = passwordResult.error.errors[0].message;
+      }
     }
 
     if (mode === "signup") {
       const nameResult = nameSchema.safeParse(name);
       if (!nameResult.success) {
         newErrors.name = nameResult.error.errors[0].message;
+      }
+    }
+
+    if (mode === "phone") {
+      const phoneResult = phoneSchema.safeParse(phone);
+      if (!phoneResult.success) {
+        newErrors.phone = phoneResult.error.errors[0].message;
       }
     }
 
@@ -122,6 +139,61 @@ const Auth = () => {
     setIsLoading(false);
   };
 
+  const handlePhoneSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      phone,
+    });
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("OTP sent! Check your phone for the verification code.");
+      setMode("phone-verify");
+    }
+    setIsLoading(false);
+  };
+
+  const handlePhoneVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.length !== 6) {
+      toast.error("Please enter a valid 6-digit OTP");
+      return;
+    }
+
+    setIsLoading(true);
+    const { error } = await supabase.auth.verifyOtp({
+      phone,
+      token: otp,
+      type: "sms",
+    });
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Phone verified! Welcome to MindCheck.");
+      navigate("/");
+    }
+    setIsLoading(false);
+  };
+
+  const handleResendOtp = async () => {
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      phone,
+    });
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("OTP resent! Check your phone.");
+    }
+    setIsLoading(false);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-primary">
@@ -147,7 +219,7 @@ const Auth = () => {
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              onClick={() => setMode("welcome")}
+              onClick={() => mode === "phone-verify" ? setMode("phone") : setMode("welcome")}
               className="mb-4 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -183,6 +255,8 @@ const Auth = () => {
             {mode === "welcome" && "Your wellness companion"}
             {mode === "signin" && "Welcome back"}
             {mode === "signup" && "Create your account"}
+            {mode === "phone" && "Sign in with phone"}
+            {mode === "phone-verify" && "Verify your phone"}
           </motion.p>
 
           {mode === "welcome" && (
@@ -224,6 +298,14 @@ const Auth = () => {
                 )}
               </button>
 
+              <button
+                onClick={() => setMode("phone")}
+                className="w-full py-4 rounded-xl border border-border bg-background text-foreground font-semibold flex items-center justify-center gap-3 hover:bg-muted transition-colors"
+              >
+                <Phone className="w-5 h-5" />
+                Continue with Phone
+              </button>
+
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border"></div>
@@ -250,6 +332,110 @@ const Auth = () => {
                 </button>
               </p>
             </motion.div>
+          )}
+
+          {mode === "phone" && (
+            <motion.form
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              onSubmit={handlePhoneSendOtp}
+              className="space-y-4"
+            >
+              <div>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+1234567890"
+                    className="w-full pl-12 pr-4 py-4 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  />
+                </div>
+                {errors.phone && <p className="text-destructive text-sm mt-1">{errors.phone}</p>}
+                <p className="text-muted-foreground text-xs mt-2">Include your country code (e.g., +1 for US)</p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-4 rounded-xl gradient-primary text-primary-foreground font-semibold shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Send OTP"
+                )}
+              </button>
+
+              <p className="text-center text-sm text-muted-foreground">
+                Prefer email?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode("signin")}
+                  className="text-primary font-semibold hover:underline"
+                >
+                  Sign in with email
+                </button>
+              </p>
+            </motion.form>
+          )}
+
+          {mode === "phone-verify" && (
+            <motion.form
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              onSubmit={handlePhoneVerifyOtp}
+              className="space-y-6"
+            >
+              <div className="text-center">
+                <p className="text-muted-foreground text-sm mb-4">
+                  Enter the 6-digit code sent to <span className="font-semibold text-foreground">{phone}</span>
+                </p>
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={otp}
+                    onChange={(value) => setOtp(value)}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || otp.length !== 6}
+                className="w-full py-4 rounded-xl gradient-primary text-primary-foreground font-semibold shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Verify OTP"
+                )}
+              </button>
+
+              <p className="text-center text-sm text-muted-foreground">
+                Didn't receive the code?{" "}
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={isLoading}
+                  className="text-primary font-semibold hover:underline disabled:opacity-50"
+                >
+                  Resend OTP
+                </button>
+              </p>
+            </motion.form>
           )}
 
           {mode === "signin" && (
