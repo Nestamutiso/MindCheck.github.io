@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MindCheck Pro</string>
+    <string name="title_activity_main">MindCheck Pro</string>
+    <string name="package_name">app.lovable.cfd02d2c7b914ca7aa03b6c6bfcfb6dc</string>
+    <string name="custom_url_scheme">app.lovable.cfd02d2c7b914ca7aa03b6c6bfcfb6dc</string>
+</resources>
