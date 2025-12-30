@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Capacitor } from '@capacitor/core';
 
 interface Subscription {
   id: string;
@@ -21,15 +20,15 @@ interface SubscriptionContextType {
   trialDaysRemaining: number;
   loading: boolean;
   refreshSubscription: () => Promise<void>;
-  purchaseSubscription: (packageId: string) => Promise<boolean>;
+  purchaseSubscription: (productId: string) => Promise<boolean>;
   restorePurchases: () => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 const PRODUCTS = {
-  MONTHLY: '$rc_monthly',
-  YEARLY: '$rc_annual'
+  MONTHLY: 'mindcheck_premium_monthly',
+  YEARLY: 'mindcheck_premium_yearly'
 } as const;
 
 export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
@@ -84,11 +83,11 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
     return isTrialActive();
   }, [subscription, isTrialActive]);
 
-  const updateSubscriptionAfterPurchase = async (packageIdentifier: string) => {
+  const updateSubscriptionAfterPurchase = async (productId: string) => {
     if (!user) return;
 
     const now = new Date();
-    const periodEnd = packageIdentifier === PRODUCTS.YEARLY 
+    const periodEnd = productId === PRODUCTS.YEARLY 
       ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
       : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
@@ -103,70 +102,28 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
       .eq('user_id', user.id);
   };
 
-  const purchaseSubscription = async (packageIdentifier: string): Promise<boolean> => {
-    if (!Capacitor.isNativePlatform()) {
-      console.log('In-app purchases are only available on native platforms');
-      return false;
+  const purchaseSubscription = async (productId: string): Promise<boolean> => {
+    // Google Play Billing integration placeholder
+    // This will be implemented when the app is running on native Android
+    // For now, we show that in-app purchases require native platform
+    console.log('Purchase requested for:', productId);
+    console.log('In-app purchases require Google Play Billing on native Android');
+    
+    // For testing/demo purposes, simulate a successful purchase
+    if (import.meta.env.DEV) {
+      await updateSubscriptionAfterPurchase(productId);
+      await fetchSubscription();
+      return true;
     }
-
-    try {
-      const { CapacitorPurchases } = await import('@capgo/capacitor-purchases');
-      
-      const { offerings } = await CapacitorPurchases.getOfferings();
-      const currentOffering = offerings.current;
-      
-      if (!currentOffering) {
-        console.error('No offerings available');
-        return false;
-      }
-      
-      const pkg = currentOffering.availablePackages.find(p => p.identifier === packageIdentifier);
-      
-      if (!pkg) {
-        console.error('Package not found:', packageIdentifier);
-        return false;
-      }
-      
-      const { customerInfo } = await CapacitorPurchases.purchasePackage({
-        identifier: pkg.identifier,
-        offeringIdentifier: currentOffering.identifier
-      });
-      
-      if (customerInfo?.entitlements?.active?.['premium']) {
-        await updateSubscriptionAfterPurchase(packageIdentifier);
-        await fetchSubscription();
-        return true;
-      }
-      
-      return false;
-    } catch (err: unknown) {
-      console.error('Purchase error:', err);
-      return false;
-    }
+    
+    return false;
   };
 
   const restorePurchases = async () => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    try {
-      const { CapacitorPurchases } = await import('@capgo/capacitor-purchases');
-      const { customerInfo } = await CapacitorPurchases.restorePurchases();
-      
-      if (customerInfo?.entitlements?.active?.['premium']) {
-        if (user) {
-          await supabase
-            .from('subscriptions')
-            .update({
-              tier: 'premium',
-              status: 'active'
-            })
-            .eq('user_id', user.id);
-        }
-        await fetchSubscription();
-      }
-    } catch (err) {
-      console.error('Restore purchases error:', err);
-    }
+    // Google Play Billing restore purchases placeholder
+    console.log('Restore purchases requested');
+    console.log('This will work with Google Play Billing on native Android');
+    await fetchSubscription();
   };
 
   return (

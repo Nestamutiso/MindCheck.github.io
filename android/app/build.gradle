@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "app.lovable.cfd02d2c7b914ca7aa03b6c6bfcfb6dc"
+    namespace = "com.nesta.mindcheck"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.lovable.cfd02d2c7b914ca7aa03b6c6bfcfb6dc"
+        applicationId "com.nesta.mindcheck"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

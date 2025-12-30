@@ -169,7 +169,7 @@ const EnhancedChatView = ({ userName, onMoodDetected, onCrisis }: EnhancedChatVi
       {/* Messages */}
       <div className="flex-1 overflow-auto space-y-4 py-4">
         {messages.map((message, index) => (
-          <ChatBubble key={index} message={message.text} isBot={message.isBot} />
+          <ChatBubble key={index} message={message.text} isBot={message.isBot} index={index} />
         ))}
         {isTyping && (
           <div className="flex items-center gap-2 text-muted-foreground">
